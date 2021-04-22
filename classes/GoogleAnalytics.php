@@ -28,7 +28,7 @@ class GoogleAnalytics
             );
 
             // Get GA results
-            $result = $service->data_ga->get($id, $post['publish'], 'today', 'ga:visits', $metrics);
+            $result = $service->data_ga->get($_ENV['GA_ID'], $post['publish'], 'today', 'ga:visits', $metrics);
 
             $data = array(
                 'post_id'     => $post['post_id'],

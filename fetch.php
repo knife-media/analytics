@@ -61,14 +61,12 @@ function get_limit($database, $limit) {
 function get_posts($database, $limit = 3000) {
     $limit = get_limit($database, $limit);
 
-    /*
     if ($limit > 0) {
         $select = "SELECT post_id, slug, DATE(publish) AS publish FROM posts ORDER BY updated, post_id ASC LIMIT " . $limit;
 
         // Get availible posts
         return $database->query($select)->fetchAll();
     }
-     */
 
     $select = "SELECT post_id, slug, DATE(publish) AS publish FROM posts WHERE publish > DATE_SUB(NOW(), INTERVAL 1 MONTH)";
 
@@ -80,10 +78,10 @@ try {
     $posts = get_posts($database);
 
     // Collect Social Shares data
-    SocialShares::collect($posts, $database);
+#    SocialShares::collect($posts, $database);
 
     // Collect Google Analtycs data
-    // GoogleAnalytics::collect($posts, $database);
+    GoogleAnalytics::collect($posts, $database);
 
 } catch(Exception $e) {
     echo $e->getMessage();
