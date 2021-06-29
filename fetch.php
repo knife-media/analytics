@@ -1,89 +1,133 @@
 <?php
 /**
- * Fetch post views from google analytics
+ * Fetch post views and social shares data.
  *
- * @version 1.0.0
+ * @package knife-analytics
+ * @version 1.1.0
+ * @author  Anton Lukin
+ * @license MIT
  */
+
+namespace Knife\Analytics;
+
+use Dotenv\Dotenv;
+use Exception;
+use PDO;
 
 if(php_sapi_name() !== 'cli') {
     exit;
 }
 
-
 /**
- * Register composer autoloader
+ * Register composer autoloader.
  */
 require_once(__DIR__ . '/vendor/autoload.php');
 
-
 /**
- * Try to load dotenv
+ * Create database instance and declare common fetching methods.
  */
-$dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
-$dotenv->load();
+class Fetch {
+    /**
+     * Database instance.
+     */
+    protected static $db = null;
 
+    /**
+     * Set current directory path.
+     */
+    protected static $path = __DIR__;
 
-/**
- * Check required options
- */
-$dotenv->required(
-    array('DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASS')
-);
+    /**
+     * Class entry point.
+     */
+    public function __construct() {
+        $dotenv = Dotenv::createImmutable(__DIR__);
+        $dotenv->load();
 
-define('ABSPATH', dirname(__FILE__));
+        $dotenv->required(
+            array('DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASSWORD')
+        );
 
+        $dsn = "mysql:host={$_ENV['DB_HOST']};dbname={$_ENV['DB_NAME']};charset=utf8";
 
-/**
- * Create PDO statement
- */
-$statement = "mysql:host={$_ENV['DB_HOST']};dbname={$_ENV['DB_NAME']};charset=utf8";
+        // Set PDO settings.
+        $settings = array(
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES => false,
+            PDO::ATTR_STRINGIFY_FETCHES => true
+        );
 
-
-/**
- * Connect with database
- */
-$database = new PDO($statement, $_ENV['DB_USER'], $_ENV['DB_PASS']);
-
-
-/**
- * Get query limit for today
- */
-function get_limit($database, $limit) {
-    // Check limits for today
-    $count = (int) $database->query("SELECT COUNT(*) FROM posts WHERE DATE(updated) = DATE(NOW())")->fetchColumn();
-
-    return $limit - $count;
-}
-
-/**
- * Get posts using limit
- */
-function get_posts($database, $limit = 3000) {
-    $limit = get_limit($database, $limit);
-
-    if ($limit > 0) {
-        $select = "SELECT post_id, slug, DATE(publish) AS publish FROM posts ORDER BY updated, post_id ASC LIMIT " . $limit;
-
-        // Get availible posts
-        return $database->query($select)->fetchAll();
+        self::$db = new PDO($dsn, $_ENV['DB_USER'], $_ENV['DB_PASSWORD'], $settings);
     }
 
-    $select = "SELECT post_id, slug, DATE(publish) AS publish FROM posts WHERE publish > DATE_SUB(NOW(), INTERVAL 1 MONTH)";
+    /**
+     * Launch fetching process.
+     */
+    public function launch() {
+        try {
+            // Collect Social Shares data.
+            new SocialShares();
 
-    // Get posts for month
-    return $database->query($select)->fetchAll();
+            // Collect Google Analytics data.
+            new GoogleAnalytics();
+
+        } catch(Exception $e) {
+            $this->notify_admin($e->getMessage());
+        }
+    }
+
+    /**
+     * Notify admins about parse errors.
+     *
+     * @param string $error Error message.
+     */
+    protected function notify_admin($error)
+    {
+        if (!isset($_ENV['TELEGRAM_CHAT'], $_ENV['TELEGRAM_TOKEN'])) {
+            return;
+        }
+
+        $message = array(
+            'text'       => $error,
+            'chat_id'    => $_ENV['TELEGRAM_CHAT'],
+            'parse_mode' => 'HTML',
+            'disable_web_page_preview' => true
+        );
+
+        $url = 'https://api.telegram.org/bot' . $_ENV['TELEGRAM_TOKEN'] . '/sendMessage';
+
+        $this->make_request($url, $message);
+    }
+
+    /**
+     * Send cURL request.
+     *
+     * @param string $url Custom URL.
+     *
+     * @return string|bool
+     */
+    protected function make_request($url, $data = null)
+    {
+        $curl = curl_init();
+
+        curl_setopt($curl, CURLOPT_URL, $url);
+        curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($curl, CURLOPT_FOLLOWLOCATION, 1);
+        curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($curl, CURLOPT_USERAGENT, 'curl/' . curl_version()['version']);
+
+        if ($data) {
+            curl_setopt($curl, CURLOPT_POST, 1);
+            curl_setopt($curl, CURLOPT_POSTFIELDS, $data);
+        }
+
+        $result = curl_exec($curl);
+        curl_close($curl);
+
+        return $result;
+    }
 }
 
-try {
-    $posts = get_posts($database);
-
-    // Collect Social Shares data
-#    SocialShares::collect($posts, $database);
-
-    // Collect Google Analtycs data
-    GoogleAnalytics::collect($posts, $database);
-
-} catch(Exception $e) {
-    echo $e->getMessage();
-}
+(new Fetch)->launch();
 
