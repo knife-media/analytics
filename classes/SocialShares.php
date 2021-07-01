@@ -200,7 +200,7 @@ class SocialShares extends Fetch
         }
 
         // Try alternate method.
-        if ($shares < $before) {
+        if ($shares <= $before) {
             $data = $this->make_request('https://www.facebook.com/plugins/like.php?layout=button_count&locale=en_US&href=' . $link);
 
             if (false === $data) {
