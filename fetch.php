@@ -107,7 +107,7 @@ class Fetch {
      *
      * @return string|bool
      */
-    protected function make_request($url, $data = null)
+    protected function make_request($url, $data = null, $cookie = null)
     {
         $curl = curl_init();
 
@@ -120,6 +120,10 @@ class Fetch {
         if ($data) {
             curl_setopt($curl, CURLOPT_POST, 1);
             curl_setopt($curl, CURLOPT_POSTFIELDS, $data);
+        }
+
+        if ($cookie) {
+            curl_setopt($curl, CURLOPT_HTTPHEADER, array("Cookie: " . $cookie));
         }
 
         $result = curl_exec($curl);
