@@ -233,13 +233,13 @@ class SocialShares extends Fetch
      */
     private function get_vk_data($link, $before = 0)
     {
-        $data = $this->make_request('https://vk.com/share.php?act=count&index=0&url=' . $link);
+        $data = $this->make_request('https://vk-com.translate.goog/share.php?act=count&index=0&url=' . $link . '&_x_tr_sl=auto&_x_tr_tl=en&_x_tr_hl=en&_x_tr_pto=wapp');
 
         if (false === $data) {
             return $before;
         }
 
-        preg_match('/^VK.Share.count\(0, (\d+)\);$/', $data, $likes);
+        preg_match('/VK.Share.count\(0, (\d+)\)/s', $data, $likes);
 
         if (!isset($likes[1])) {
             throw new Exception("Analytics VK.com parse error:\n" . urldecode($link));
