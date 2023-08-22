@@ -3,7 +3,7 @@
  * Fetch post views and social shares data.
  *
  * @package knife-analytics
- * @version 1.1.0
+ * @version 1.2.0
  * @author  Anton Lukin
  * @license MIT
  */
@@ -66,12 +66,11 @@ class Fetch {
      */
     public function launch() {
         try {
-            // Collect Social Shares data.
-            new SocialShares();
-
             // Collect Google Analytics data.
             new GoogleAnalytics();
 
+            // Collect Social Shares data.
+            new SocialShares();
         } catch(Exception $e) {
             $this->notify_admin($e->getMessage());
         }

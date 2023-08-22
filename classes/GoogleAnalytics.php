@@ -9,8 +9,10 @@
 namespace Knife\Analytics;
 
 use Exception;
-use Google_Client;
-use Google_Service_Analytics;
+use Google\Analytics\Data\V1beta\BetaAnalyticsDataClient;
+use Google\Analytics\Data\V1beta\DateRange;
+use Google\Analytics\Data\V1beta\Dimension;
+use Google\Analytics\Data\V1beta\Metric;
 
 /**
  * Collect and save analytics data from Google Analytics.
@@ -25,6 +27,8 @@ class GoogleAnalytics extends Fetch
         if (!isset($_ENV['GA_ID'], $_ENV['GA_KEY'])) {
             return;
         }
+
+        putenv("GOOGLE_APPLICATION_CREDENTIALS=" . self::$path . $_ENV['GA_KEY']);
 
         // Get posts list to fetch data.
         $posts = $this->get_posts();
@@ -43,56 +47,16 @@ class GoogleAnalytics extends Fetch
      */
     private function get_posts($posts = array())
     {
-        // Add required last 60 posts.
-        $posts = array_merge($posts, $this->get_last_posts());
-
-        // Calculate up to the total limit.
-        $limit = 300 - count($posts);
-
-        if ($limit > 0) {
-            $posts = array_merge($posts, $this->get_outdated_posts($limit));
-        }
-
-        return $posts;
-    }
-
-    /**
-     * Get outdated posts.
-     *
-     * @param int $limit Select posts limit.
-     *
-     * @return array
-     */
-    private function get_outdated_posts($limit = 200)
-    {
-        $select = self::$db->prepare("SELECT posts.post_id, posts.slug,
+         $select = self::$db->prepare("SELECT posts.post_id, posts.slug, views.oldviews,
             DATE(posts.publish) as publish
             FROM posts LEFT JOIN views USING (post_id)
-            ORDER BY views.updated ASC LIMIT :limit");
+            WHERE views.updated < DATE_SUB(NOW(), INTERVAL 6 HOUR)
+            ORDER BY views.updated ASC");
 
-
-        $select->execute(compact('limit'));
-
-        return $select->fetchAll();
-    }
-
-    /**
-     * Get last 30 posts.
-     *
-     * @param int $limit Select posts limit.
-     *
-     * @return array
-     */
-    private function get_last_posts($limit = 60)
-    {
-        $select = self::$db->prepare("SELECT post_id, slug,
-            DATE(publish) AS publish FROM posts ORDER BY publish DESC LIMIT :limit");
-
-        $select->execute(compact('limit'));
+        $select->execute();
 
         return $select->fetchAll();
     }
-
 
     /**
      * Init class with posts list.
@@ -101,38 +65,56 @@ class GoogleAnalytics extends Fetch
      */
     private function collect($posts)
     {
-        $client = new Google_Client();
+        $client = new BetaAnalyticsDataClient();
 
-        $client->setAuthConfig(self::$path . $_ENV['GA_KEY']);
-        $client->setScopes(array('https://www.googleapis.com/auth/analytics.readonly'));
+        $response = $client->runReport(array(
+            'property' => 'properties/' . $_ENV['GA_ID'],
+            'dateRanges' => array(
+                new DateRange(
+                    array(
+                        'start_date' => '2023-08-11',
+                        'end_date' => 'today',
+                    )
+                ),
+            ),
+            'dimensions' => array(
+                new Dimension(
+                    array(
+                        'name' => 'pagePath',
+                    )
+                ),
+            ),
+            'metrics' => array(
+                new Metric(
+                    array(
+                        'name' => 'screenPageViews',
+                    )
+                )
+            ),
+            'limit' => 250000,
+        ));
 
-        // Create new Analytics service.
-        $service = new Google_Service_Analytics($client);
+        $fields = array();
+
+        foreach ($response->getRows() as $row) {
+            $fields[$row->getDimensionValues()[0]->getValue()] = $row->getMetricValues()[0]->getValue();
+        }
 
         foreach ($posts as $post) {
-            $metrics = array(
-                'metrics'     => 'ga:pageviews,ga:uniquePageviews',
-                'filters'     => 'ga:pagePath=@' . $post['slug'],
-                'max-results' => '50',
-            );
+            $slug = $post['slug'];
 
-            try {
-                // Get GA results.
-                $result = $service->data_ga->get($_ENV['GA_ID'], $post['publish'], 'today', 'ga:visits', $metrics);
-
-            } catch (Exception $e) {
+            if (!isset($fields[$slug])) {
                 continue;
             }
 
             $data = array(
-                'post_id'     => $post['post_id'],
-                'pageviews'   => $result->totalsForAllResults['ga:pageviews'],
-                'uniqueviews' => $result->totalsForAllResults['ga:uniquePageviews'],
+                'post_id'   => $post['post_id'],
+                'pageviews' => (int) $fields[$slug] + (int) $post['oldviews'],
             );
 
-            $insert = self::$db->prepare("INSERT INTO views (post_id, pageviews, uniqueviews)
-                VALUES (:post_id, :pageviews, :uniqueviews) ON DUPLICATE KEY
-                UPDATE pageviews = VALUES(pageviews), uniqueviews = VALUES(uniqueviews), updated = NOW()");
+            $insert = self::$db->prepare("INSERT INTO views (post_id, pageviews)
+                VALUES (:post_id, :pageviews) ON DUPLICATE KEY
+                UPDATE pageviews = VALUES(pageviews), updated = NOW()");
 
             $insert->execute($data);
         }

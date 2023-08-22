@@ -1,7 +1,8 @@
 {
     "require": {
         "vlucas/phpdotenv": "^4.1",
-        "google/apiclient": "^2.0"
+        "google/apiclient": "^2.15",
+        "google/analytics-data": "^0.11.1"
     },
     "autoload": {
         "classmap": ["classes/"]

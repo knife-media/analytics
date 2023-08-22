@@ -108,7 +108,7 @@ class SocialShares extends Fetch
     }
 
     /**
-     * Collect psots data.
+     * Collect posts data.
      *
      * @param array $posts List of posts.
      */
@@ -201,7 +201,7 @@ class SocialShares extends Fetch
 
         // Try alternate method.
         if ($shares <= $before) {
-            $data = $this->make_request('https://www.facebook.com/plugins/like.php?layout=button_count&locale=en_US&href=' . $link, null, 'c_user=100001793856607');
+            $data = $this->make_request('https://www.facebook.com/plugins/like.php?layout=button_count&locale=en_US&href=' . $link, null, 'c_user=100001793856607&i_user=100001793856607');
 
             if (false === $data) {
                 return $before;
@@ -210,7 +210,7 @@ class SocialShares extends Fetch
             preg_match('#>Like</span><span.+?>([\d.]+K?)<#i', $data, $likes);
 
             if (!isset($likes[1])) {
-                throw new Exception("Analytics Facebook parse error:\n" . urldecode($link));
+                return $before;
             }
 
             $shares = $likes[1];
@@ -242,7 +242,7 @@ class SocialShares extends Fetch
         preg_match('/VK.Share.count\(0, (\d+)\)/s', $data, $likes);
 
         if (!isset($likes[1])) {
-            throw new Exception("Analytics VK.com parse error:\n" . urldecode($link));
+            return $before;
         }
 
         return max($likes[1], $before);
