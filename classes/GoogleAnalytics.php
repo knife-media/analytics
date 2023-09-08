@@ -47,11 +47,9 @@ class GoogleAnalytics extends Fetch
      */
     private function get_posts($posts = array())
     {
-         $select = self::$db->prepare("SELECT posts.post_id, posts.slug, views.oldviews,
+         $select = self::$db->prepare("SELECT posts.post_id, posts.slug,
             DATE(posts.publish) as publish
-            FROM posts LEFT JOIN views USING (post_id)
-            WHERE views.updated < DATE_SUB(NOW(), INTERVAL 6 HOUR)
-            ORDER BY views.updated ASC");
+            FROM posts ORDER BY publish DESC");
 
         $select->execute();
 
@@ -105,6 +103,10 @@ class GoogleAnalytics extends Fetch
 
             if (!isset($fields[$slug])) {
                 continue;
+            }
+
+            if (empty($post['oldviews'])) {
+                $post['oldviews'] = 0;
             }
 
             $data = array(
