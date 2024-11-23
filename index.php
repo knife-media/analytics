@@ -32,6 +32,11 @@ final class API {
     private static $db = null;
 
     /**
+     * Script base
+     */
+    private static $base = '';
+
+    /**
      * Class entry point.
      */
     public function __construct() {
@@ -52,6 +57,10 @@ final class API {
             PDO::ATTR_STRINGIFY_FETCHES => true
         );
 
+        if (!empty($_ENV['URL_BASE'])) {
+            self::$base = $_ENV['URL_BASE'];
+        }
+
         self::$db = new PDO($dsn, $_ENV['DB_USER'], $_ENV['DB_PASSWORD'], $settings);
     }
 
@@ -61,7 +70,7 @@ final class API {
      * @param string $request Request URI.
      */
     public function router($request) {
-        $url = strtok($request, '?');
+        $url = strtok(str_replace(self::$base, '', $request), '?');
 
         // Get first url subdirectory.
         list($action) = explode('/', trim($url, '/'));
